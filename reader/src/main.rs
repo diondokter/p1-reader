@@ -1,10 +1,35 @@
-use std::time::Duration;
-use std::{error::Error, io::Read};
+#![allow(clippy::type_complexity)]
+
+use std::{env, error::Error, io::Read, time::Duration};
 
 use chrono::{TimeZone, Utc};
 use dsmr5::{Tariff, Telegram};
+use sqlx::postgres::PgPool;
+use tokio::sync::mpsc;
 
-fn main() {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<(), Box<dyn Error>> {
+    dotenv::dotenv().ok();
+
+    let (data_tx, mut data_rx) = mpsc::channel(64);
+
+    println!("Spawning serial port reader");
+    std::thread::spawn(|| serial_port_reader(data_tx));
+
+    println!("Connecting to database");
+    let pool = PgPool::connect(&env::var("DATABASE_URL")?).await?;
+    println!("Running database migrations");
+    sqlx::migrate!().run(&pool).await?;
+    println!("Ready");
+
+    loop {
+        let data = data_rx.recv().await.unwrap();
+
+        println!("Received data: {data:#?}");
+    }
+}
+
+fn serial_port_reader(data_tx: mpsc::Sender<(ElectricityData, [Option<SlaveData>; 4])>) {
     let port = serialport::new("/dev/ttyUSB0", 115_200)
         .timeout(Duration::from_millis(2000))
         .open()
@@ -29,9 +54,7 @@ fn main() {
             }
         };
 
-        println!("\n---------------------------\n");
-
-        let (electricity_data, slave_data) = match telegram_to_data(telegram) {
+        let data = match telegram_to_data(telegram) {
             Ok(val) => val,
             Err(e) => {
                 println!("Getting data error: {e:?}");
@@ -39,8 +62,9 @@ fn main() {
             }
         };
 
-        println!("{electricity_data:#?}");
-        println!("{slave_data:#?}");
+        if let Err(e) = data_tx.try_send(data) {
+            println!("Could not send data to database handler: {e:?}");
+        }
     }
 }
 
@@ -57,25 +81,25 @@ fn telegram_to_data(
         match obj {
             Ok(obj) => match obj {
                 dsmr5::OBIS::MeterReadingTo(Tariff::Tariff1, ref val) => {
-                    electricity_data.kwh_import_total_tarif_low = val.into()
+                    electricity_data.kwh_import_total_tarif_low = f64::from(val) as f32;
                 }
                 dsmr5::OBIS::MeterReadingTo(Tariff::Tariff2, ref val) => {
-                    electricity_data.kwh_import_total_tarif_high = val.into()
+                    electricity_data.kwh_import_total_tarif_high = f64::from(val) as f32;
                 }
                 dsmr5::OBIS::MeterReadingBy(Tariff::Tariff1, ref val) => {
-                    electricity_data.kwh_export_total_tarif_low = val.into()
+                    electricity_data.kwh_export_total_tarif_low = f64::from(val) as f32;
                 }
                 dsmr5::OBIS::MeterReadingBy(Tariff::Tariff2, ref val) => {
-                    electricity_data.kwh_export_total_tarif_high = val.into()
+                    electricity_data.kwh_export_total_tarif_high = f64::from(val) as f32;
                 }
                 dsmr5::OBIS::InstantaneousVoltage(line, ref val) => {
-                    electricity_data.voltages[line as usize] = val.into()
+                    electricity_data.voltages[line as usize] = f64::from(val) as f32;
                 }
                 dsmr5::OBIS::InstantaneousActivePowerPlus(line, ref val) => {
-                    electricity_data.active_powers_import[line as usize] = val.into()
+                    electricity_data.active_powers_import[line as usize] = f64::from(val) as f32;
                 }
                 dsmr5::OBIS::InstantaneousActivePowerNeg(line, ref val) => {
-                    electricity_data.active_powers_export[line as usize] = val.into()
+                    electricity_data.active_powers_export[line as usize] = f64::from(val) as f32;
                 }
                 dsmr5::OBIS::SlaveMeterReading(s, timestamp, Some(ref val)) => {
                     let offset =
@@ -95,7 +119,7 @@ fn telegram_to_data(
                             .latest()
                             .ok_or_else(|| format!("Time error!: {timestamp:?}"))?
                             .to_utc(),
-                        value: val.into(),
+                        value: f64::from(val) as f32,
                     });
                 }
                 _ => {}
@@ -111,18 +135,18 @@ fn telegram_to_data(
 struct ElectricityData {
     time: chrono::DateTime<Utc>,
 
-    kwh_import_total_tarif_low: f64,
-    kwh_import_total_tarif_high: f64,
-    kwh_export_total_tarif_low: f64,
-    kwh_export_total_tarif_high: f64,
+    kwh_import_total_tarif_low: f32,
+    kwh_import_total_tarif_high: f32,
+    kwh_export_total_tarif_low: f32,
+    kwh_export_total_tarif_high: f32,
 
-    voltages: [f64; 3],
-    active_powers_import: [f64; 3],
-    active_powers_export: [f64; 3],
+    voltages: [f32; 3],
+    active_powers_import: [f32; 3],
+    active_powers_export: [f32; 3],
 }
 
 #[derive(Debug, Copy, Clone, Default)]
 struct SlaveData {
     time: chrono::DateTime<Utc>,
-    value: f64,
+    value: f32,
 }

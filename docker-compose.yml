@@ -1,0 +1,24 @@
+services:
+  db:
+    image: postgres:16.2-alpine
+    restart: unless-stopped
+    shm_size: 128mb
+    environment:
+      POSTGRES_PASSWORD: psqlpassword
+    volumes:
+      - ./data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  app:
+    build: ./reader
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgres://postgres:psqlpassword@db/p1-data
+    volumes:
+      - ./reader:/usr/src/myapp
+    devices:
+      - "/dev/ttyUSB0:/dev/ttyUSB0"
+    working_dir: /usr/src/myapp
