@@ -1,6 +1,6 @@
 #!/bin/bash
 
-docker compose up db -d
+docker compose up db -d --wait
 cd reader
 sqlx migrate run
 cd ../
