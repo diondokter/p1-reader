@@ -23,9 +23,34 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("Ready");
 
     loop {
-        let data = data_rx.recv().await.unwrap();
+        let (electricity_data, slave_data) = data_rx.recv().await.unwrap();
 
-        println!("Received data: {data:#?}");
+        sqlx::query!(
+            "insert into electricity_data_points values($1, $2, $3, $4, $5, $6, $7, $8)",
+            electricity_data.time,
+            electricity_data.kwh_import_total_tarif_low,
+            electricity_data.kwh_import_total_tarif_high,
+            electricity_data.kwh_export_total_tarif_low,
+            electricity_data.kwh_export_total_tarif_high,
+            &electricity_data.voltages,
+            &electricity_data.active_powers_import,
+            &electricity_data.active_powers_export,
+        )
+        .execute(&pool)
+        .await?;
+
+        for (i, slave_data) in slave_data.into_iter().enumerate() {
+            if let Some(slave_data) = slave_data {
+                sqlx::query!(
+                    "insert into slave_data_points values($1, $2, $3) ON CONFLICT DO NOTHING",
+                    slave_data.time,
+                    i as i16,
+                    slave_data.value,
+                )
+                .execute(&pool)
+                .await?;
+            }
+        }
     }
 }
 
