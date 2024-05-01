@@ -5,13 +5,16 @@ services:
     shm_size: 128mb
     environment:
       POSTGRES_PASSWORD: psqlpassword
+      POSTGRES_DB: p1-data
     volumes:
       - ./data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
 
   app:
-    build: ./reader
+    build:
+      context: ./reader
+      network: host
     restart: unless-stopped
     depends_on:
       - db

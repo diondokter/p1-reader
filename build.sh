@@ -1,6 +1,8 @@
 #!/bin/bash
 
 docker compose up db -d
+cd reader
 sqlx migrate run
-(export DATABASE_URL="postgres://postgres:psqlpassword@db/p1-data"; docker compose build)
+cd ../
+docker compose build
 docker compose down
