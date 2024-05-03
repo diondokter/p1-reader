@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: psqlpassword
       POSTGRES_DB: p1-data
     volumes:
-      - ./data:/var/lib/postgresql/data
+      - postgres-storage:/var/lib/postgresql/data
     ports:
       - "5432:5432"
 
@@ -25,3 +25,18 @@ services:
     devices:
       - "/dev/ttyUSB0:/dev/ttyUSB0"
     working_dir: /usr/src/myapp
+
+  grafana:
+    image: grafana/grafana-enterprise
+    container_name: grafana
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - '3000:3000'
+    volumes:
+      - grafana-storage:/var/lib/grafana
+
+volumes:
+  grafana-storage: {}
+  postgres-storage: {}
