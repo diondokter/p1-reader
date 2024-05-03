@@ -32,6 +32,8 @@ services:
     restart: unless-stopped
     depends_on:
       - db
+    environment:
+      GF_DASHBOARDS_MIN_REFRESH_INTERVAL: 1s
     ports:
       - '3000:3000'
     volumes:
