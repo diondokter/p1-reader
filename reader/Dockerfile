@@ -1,5 +1,5 @@
 # Dockerfile
-FROM rust:1.77
+FROM rust:1.86
 WORKDIR /usr/src/myapp
 
 # Install libudev
