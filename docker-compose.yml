@@ -2,7 +2,7 @@ services:
   db:
     image: postgres:16.2-alpine
     restart: unless-stopped
-    shm_size: 128mb
+    shm_size: 512mb
     environment:
       POSTGRES_PASSWORD: psqlpassword
       POSTGRES_DB: p1-data
