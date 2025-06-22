@@ -1,6 +1,6 @@
 -- Add up migration script here
 
-CREATE TABLE solar_data_points (
+CREATE TABLE IF NOT EXISTS solar_data_points (
 	time TIMESTAMPTZ PRIMARY KEY,
 
 	-- delivered to net

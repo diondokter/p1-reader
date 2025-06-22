@@ -34,7 +34,7 @@ services:
     depends_on:
       - db
     environment:
-      DATABASE_URL: postgres://postgres:psqlpassword@db/p1-data
+      DATABASE_URL: postgres://postgres:psqlpassword@db/solar-data
       INVERTER_SOCKADDR: "192.168.1.61:502"
     volumes:
       - ./solar-reader:/usr/src/myapp

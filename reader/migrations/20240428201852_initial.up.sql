@@ -1,6 +1,6 @@
 -- Add up migration script here
 
-CREATE TABLE electricity_data_points (
+CREATE TABLE IF NOT EXISTS electricity_data_points (
 	time TIMESTAMPTZ PRIMARY KEY,
 
 	kwh_import_total_tarif_low REAL NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE electricity_data_points (
 	active_powers_export REAL[3] NOT NULL
 );
 
-CREATE TABLE slave_data_points (
+CREATE TABLE IF NOT EXISTS slave_data_points (
 	time TIMESTAMPTZ,
     id smallint,
     value REAL NOT NULL,

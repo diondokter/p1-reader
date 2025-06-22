@@ -8,6 +8,7 @@ sqlx migrate run
 cd ../
 cd solar-reader
 echo "Running solar-reader migrations"
+sqlx database create
 sqlx migrate run
 cd ../
 echo "Building docker"
