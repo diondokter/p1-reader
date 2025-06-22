@@ -1,10 +1,11 @@
-use std::{env, error::Error, time::Duration};
+use std::{env, net::SocketAddr, time::Duration};
 
-use sqlx::postgres::PgPool;
-use tokio_modbus::prelude::*;
+use backoff::backoff::Backoff;
+use sqlx::{Pool, Postgres, postgres::PgPool};
+use tokio_modbus::client::Reader;
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
 
     println!("Connecting to database");
@@ -16,10 +17,34 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let addr = &env::var("INVERTER_SOCKADDR")?.parse()?;
     println!("Ready");
 
+    let mut backoff = backoff::ExponentialBackoffBuilder::new()
+        .with_max_interval(Duration::from_secs(300))
+        .with_initial_interval(Duration::from_secs(1))
+        .with_multiplier(1.5)
+        .with_max_elapsed_time(None)
+        .build();
+
+    loop {
+        let connect_time = tokio::time::Instant::now();
+
+        match connect_and_run(*addr, &pool).await {
+            e @ Err(Error::Sqlx(_)) => e?,
+            _ => {
+                if connect_time.elapsed() > Duration::from_secs(10) {
+                    backoff.reset();
+                }
+
+                tokio::time::sleep(backoff.next_backoff().unwrap()).await;
+            }
+        }
+    }
+}
+
+async fn connect_and_run(addr: SocketAddr, pool: &Pool<Postgres>) -> Result<(), Error> {
+    let mut ctx = tokio_modbus::client::tcp::connect_slave(addr, tokio_modbus::Slave(1)).await?;
+
     let mut interval = tokio::time::interval(Duration::from_secs(1));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-
-    let mut ctx = tcp::connect_slave(*addr, Slave(1)).await?;
 
     #[allow(clippy::eq_op)]
     loop {
@@ -45,7 +70,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
             total_energy,
             inv_temp,
         )
-        .execute(&pool)
+        .execute(pool)
         .await?;
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+enum Error {
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("Sqlx error: {0}")]
+    Sqlx(#[from] sqlx::Error),
+    #[error("Modbus error: {0}")]
+    Modbus(#[from] tokio_modbus::Error),
+    #[error("ExceptionCode error: {0}")]
+    ExceptionCode(#[from] tokio_modbus::ExceptionCode),
 }
