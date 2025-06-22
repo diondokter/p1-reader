@@ -27,7 +27,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let connect_time = tokio::time::Instant::now();
 
-        match connect_and_run(*addr, &pool).await {
+        let result = connect_and_run(*addr, &pool).await;
+        println!("Connection ended with: {}", result.as_ref().unwrap_err());
+
+        match result {
             e @ Err(Error::Sqlx(_)) => e?,
             _ => {
                 if connect_time.elapsed() > Duration::from_secs(10) {
@@ -41,6 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn connect_and_run(addr: SocketAddr, pool: &Pool<Postgres>) -> Result<(), Error> {
+    println!("Trying to connect to: {addr}");
     let mut ctx = tokio_modbus::client::tcp::connect_slave(addr, tokio_modbus::Slave(1)).await?;
 
     let mut interval = tokio::time::interval(Duration::from_secs(1));
