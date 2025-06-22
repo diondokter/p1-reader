@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .await??;
 
         let pv1_power = realtime_data[0x09 - 0x09];
-        let inv_temp = realtime_data[0x11 - 0x09] as i16 / 10;
+        let inv_temp = realtime_data[0x11 - 0x09] as i16 as f32 / 10.0;
         let power = realtime_data[0x13 - 0x09];
         let total_energy = (((realtime_data[0x31 - 0x09] as u32) << 16)
             | realtime_data[0x32 - 0x09] as u32) as f32
