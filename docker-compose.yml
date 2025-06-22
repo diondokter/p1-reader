@@ -25,6 +25,20 @@ services:
     devices:
       - "/dev/ttyUSB0:/dev/ttyUSB0"
     working_dir: /usr/src/myapp
+    
+  solar-app:
+    build:
+      context: ./solar-reader
+      network: host
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgres://postgres:psqlpassword@db/p1-data
+      INVERTER_SOCKADDR: "192.168.1.61:502"
+    volumes:
+      - ./solar-reader:/usr/src/myapp
+    working_dir: /usr/src/myapp
 
   grafana:
     image: grafana/grafana-enterprise

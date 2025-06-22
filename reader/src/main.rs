@@ -9,7 +9,7 @@ use tokio::sync::mpsc;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
-    dotenv::dotenv().ok();
+    dotenvy::dotenv().ok();
 
     let (data_tx, mut data_rx) = mpsc::channel(64);
 
