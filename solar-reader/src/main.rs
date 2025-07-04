@@ -2,6 +2,7 @@ use std::{env, net::SocketAddr, time::Duration};
 
 use backoff::backoff::Backoff;
 use sqlx::{Pool, Postgres, postgres::PgPool};
+use tokio::time::timeout;
 use tokio_modbus::client::Reader;
 
 #[tokio::main(flavor = "current_thread")]
@@ -33,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         match result {
             e @ Err(Error::Sqlx(_)) => e?,
             _ => {
-                if connect_time.elapsed() > Duration::from_secs(10) {
+                if connect_time.elapsed() > Duration::from_secs(120) {
                     backoff.reset();
                 }
 
@@ -45,7 +46,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn connect_and_run(addr: SocketAddr, pool: &Pool<Postgres>) -> Result<(), Error> {
     println!("Trying to connect to: {addr}");
-    let mut ctx = tokio_modbus::client::tcp::connect_slave(addr, tokio_modbus::Slave(1)).await?;
+    let mut ctx = timeout(
+        Duration::from_secs(60),
+        tokio_modbus::client::tcp::connect_slave(addr, tokio_modbus::Slave(1)),
+    )
+    .await??;
 
     let mut interval = tokio::time::interval(Duration::from_secs(1));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -89,4 +94,6 @@ enum Error {
     Modbus(#[from] tokio_modbus::Error),
     #[error("ExceptionCode error: {0}")]
     ExceptionCode(#[from] tokio_modbus::ExceptionCode),
+    #[error("Timeout: {0}")]
+    Timeout(#[from] tokio::time::error::Elapsed),
 }
