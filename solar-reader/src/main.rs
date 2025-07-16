@@ -52,14 +52,25 @@ async fn connect_and_run(addr: SocketAddr, pool: &Pool<Postgres>) -> Result<(), 
     )
     .await??;
 
+    println!("Connected!");
+
     let mut interval = tokio::time::interval(Duration::from_secs(1));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
+    let mut first_data = true;
+
     #[allow(clippy::eq_op)]
     loop {
-        let realtime_data = ctx
-            .read_holding_registers(0x0109, 0x0133 - 0x0109)
-            .await??;
+        let realtime_data = timeout(
+            Duration::from_secs(60),
+            ctx.read_holding_registers(0x0109, 0x0133 - 0x0109),
+        )
+        .await???;
+
+        if first_data {
+            first_data = false;
+            println!("Received the first data: {realtime_data:X?}");
+        }
 
         let pv1_power = realtime_data[0x09 - 0x09];
         let inv_temp = realtime_data[0x11 - 0x09] as i16 as f32 / 10.0;
