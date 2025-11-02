@@ -13,7 +13,8 @@ services:
 
   app:
     build:
-      context: ./reader
+      context: .
+      dockerfile: ./reader/Dockerfile
       network: host
     restart: unless-stopped
     depends_on:
