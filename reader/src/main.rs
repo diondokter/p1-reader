@@ -49,9 +49,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
             grid_meter_data.a_l2 = (electricity_data.current[1] * 1000.0).round() as i32;
             grid_meter_data.a_l3 = (electricity_data.current[2] * 1000.0).round() as i32;
 
-            grid_meter_data.w_l1 = ((electricity_data.active_powers_import[0] - electricity_data.active_powers_export[0]) * 1000.0).round() as i32;
-            grid_meter_data.w_l2 = ((electricity_data.active_powers_import[1] - electricity_data.active_powers_export[1]) * 1000.0).round() as i32;
-            grid_meter_data.w_l3 = ((electricity_data.active_powers_import[2] - electricity_data.active_powers_export[2]) * 1000.0).round() as i32;
+            grid_meter_data.w_l1 = ((electricity_data.active_powers_import[0] - electricity_data.active_powers_export[0]) * 10_000.0).round() as i32;
+            grid_meter_data.w_l2 = ((electricity_data.active_powers_import[1] - electricity_data.active_powers_export[1]) * 10_000.0).round() as i32;
+            grid_meter_data.w_l3 = ((electricity_data.active_powers_import[2] - electricity_data.active_powers_export[2]) * 10_000.0).round() as i32;
             grid_meter_data.w_sum = grid_meter_data.w_l1 + grid_meter_data.w_l2 + grid_meter_data.w_l3;
 
             grid_meter_data.kwh_plus_total = ((electricity_data.kwh_import_total_tarif_high + electricity_data.kwh_import_total_tarif_low) * 10.0).round() as i32;
