@@ -1,6 +1,6 @@
 #![allow(clippy::type_complexity)]
 
-use std::{env, error::Error, io::Read, time::Duration};
+use std::{env, error::Error, io::Read, sync::Arc, time::Duration};
 
 use chrono::{TimeZone, Utc};
 use dsmr5::{Tariff, Telegram};
@@ -10,6 +10,19 @@ use tokio::sync::mpsc;
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
     dotenvy::dotenv().ok();
+
+    let grid_meter_data = Arc::new(std::sync::Mutex::new(
+        grid_meter::InstantaneousData::default(),
+    ));
+    let grid_meter_address = env::var("GRID_METER_ADDRESS")?.parse().unwrap();
+    tokio::spawn({
+        let grid_meter_data = grid_meter_data.clone();
+        async move {
+            grid_meter::run_grid_meter_server(grid_meter_address, grid_meter_data)
+                .await
+                .unwrap();
+        }
+    });
 
     let (data_tx, mut data_rx) = mpsc::channel(64);
 
@@ -24,6 +37,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     loop {
         let (electricity_data, slave_data) = data_rx.recv().await.unwrap();
+
+        #[rustfmt::skip]
+        {
+            let mut grid_meter_data = grid_meter_data.lock().unwrap();
+            grid_meter_data.v_l1_n = (electricity_data.voltages[0] * 10.0).round() as i32;
+            grid_meter_data.v_l2_n = (electricity_data.voltages[1] * 10.0).round() as i32;
+            grid_meter_data.v_l3_n = (electricity_data.voltages[2] * 10.0).round() as i32;
+
+            grid_meter_data.a_l1 = (electricity_data.current[0] * 1000.0).round() as i32;
+            grid_meter_data.a_l2 = (electricity_data.current[1] * 1000.0).round() as i32;
+            grid_meter_data.a_l3 = (electricity_data.current[2] * 1000.0).round() as i32;
+
+            grid_meter_data.w_l1 = ((electricity_data.active_powers_import[0] - electricity_data.active_powers_export[0]) * 1000.0).round() as i32;
+            grid_meter_data.w_l2 = ((electricity_data.active_powers_import[1] - electricity_data.active_powers_export[1]) * 1000.0).round() as i32;
+            grid_meter_data.w_l3 = ((electricity_data.active_powers_import[2] - electricity_data.active_powers_export[2]) * 1000.0).round() as i32;
+            grid_meter_data.w_sum = grid_meter_data.w_l1 + grid_meter_data.w_l2 + grid_meter_data.w_l3;
+
+            grid_meter_data.kwh_plus_total = ((electricity_data.kwh_import_total_tarif_high + electricity_data.kwh_import_total_tarif_low) * 10.0).round() as i32;
+            grid_meter_data.kwh_neg_total = ((electricity_data.kwh_export_total_tarif_high + electricity_data.kwh_export_total_tarif_low) * 10.0).round() as i32;
+        };
 
         sqlx::query!(
             "insert into electricity_data_points values($1, $2, $3, $4, $5, $6, $7, $8)",
@@ -120,6 +153,9 @@ fn telegram_to_data(
                 dsmr5::OBIS::InstantaneousVoltage(line, ref val) => {
                     electricity_data.voltages[line as usize] = f64::from(val) as f32;
                 }
+                dsmr5::OBIS::InstantaneousCurrent(line, ref val) => {
+                    electricity_data.current[line as usize] = val.0 as f32;
+                }
                 dsmr5::OBIS::InstantaneousActivePowerPlus(line, ref val) => {
                     electricity_data.active_powers_import[line as usize] = f64::from(val) as f32;
                 }
@@ -166,6 +202,7 @@ struct ElectricityData {
     kwh_export_total_tarif_high: f32,
 
     voltages: [f32; 3],
+    current: [f32; 3],
     active_powers_import: [f32; 3],
     active_powers_export: [f32; 3],
 }

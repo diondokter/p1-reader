@@ -78,7 +78,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "grid-meter-test"
+name = "grid-meter"
 version = "0.1.0"
 dependencies = [
  "anyhow",

@@ -1,0 +1,9 @@
+[package]
+name = "grid-meter"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio-modbus = { version = "0.17.0", default-features = false, features = ["tcp-server"]}
+tokio = { version = "1.48.0", features = ["net"] }
+anyhow = "1.0.100"

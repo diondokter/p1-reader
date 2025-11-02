@@ -20,6 +20,9 @@ services:
       - db
     environment:
       DATABASE_URL: postgres://postgres:psqlpassword@db/p1-data
+      GRID_METER_ADDRESS: 0.0.0.0:502
+    ports:
+      - '502:502'
     volumes:
       - ./reader:/usr/src/myapp
     devices:
