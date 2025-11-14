@@ -32,7 +32,8 @@ services:
     
   solar-app:
     build:
-      context: ./solar-reader
+      context: .
+      dockerfile: ./solar-reader/Dockerfile
       network: host
     restart: unless-stopped
     depends_on:
@@ -40,6 +41,7 @@ services:
     environment:
       DATABASE_URL: postgres://postgres:psqlpassword@db/solar-data
       INVERTER_SOCKADDR: "192.168.1.61:502"
+      GRID_METER_ADDRESS: 0.0.0.0:8899
     volumes:
       - ./solar-reader:/usr/src/myapp
     working_dir: /usr/src/myapp

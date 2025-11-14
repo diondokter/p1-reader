@@ -102,6 +102,8 @@ pub struct InstantaneousData {
 
 struct GridMeterService {
     instantaneous_data: Arc<Mutex<InstantaneousData>>,
+    measuring_system: MeasuringSystem,
+    serial_number: &'static [u8],
 }
 
 impl tokio_modbus::server::Service for GridMeterService {
@@ -119,13 +121,15 @@ impl tokio_modbus::server::Service for GridMeterService {
                     (0xA000, 1) => Ok(Response::ReadHoldingRegisters(vec![0x0007])), // Type of application: H
                     (0x0302, 1) => Ok(Response::ReadHoldingRegisters(vec![0x101E])), // Version and revision code of measurement module: 1.0.30
                     (0x0304, 1) => Ok(Response::ReadHoldingRegisters(vec![0x101E])), // Version and revision code of communication module: 1.0.30
-                    (0x1002, 1) => Ok(Response::ReadHoldingRegisters(vec![0x0000])), // Measuring system: 3P.N
+                    (0x1002, 1) => Ok(Response::ReadHoldingRegisters(vec![
+                        self.measuring_system as u16,
+                    ])), // Measuring system
                     (0x5000, 7) => Ok(Response::ReadHoldingRegisters(
-                        b"BY24600320011\0"
+                        self.serial_number
                             .chunks_exact(2)
                             .map(|word| u16::from_be_bytes(word.try_into().unwrap()))
                             .collect(),
-                    )), // Serial number
+                    )), // Serial number, e.g.: b"BY24600320011\0"
                     (0xA100, 1) => Ok(Response::ReadHoldingRegisters(vec![0x0000])), // Front selector status: 0
                     (0x0000, 80) => Ok(Response::ReadHoldingRegisters({
                         let mut data = self.instantaneous_data.lock().unwrap();
@@ -149,19 +153,35 @@ impl tokio_modbus::server::Service for GridMeterService {
 }
 
 impl GridMeterService {
-    fn new(instantaneous_data: Arc<Mutex<InstantaneousData>>) -> Self {
-        Self { instantaneous_data }
+    fn new(
+        instantaneous_data: Arc<Mutex<InstantaneousData>>,
+        measuring_system: MeasuringSystem,
+        serial_number: &'static [u8],
+    ) -> Self {
+        Self {
+            instantaneous_data,
+            measuring_system,
+            serial_number,
+        }
     }
 }
 
 pub async fn run_grid_meter_server(
     socket_addr: SocketAddr,
     instantaneous_data: Arc<Mutex<InstantaneousData>>,
+    measuring_system: MeasuringSystem,
+    serial_number: &'static [u8],
 ) -> anyhow::Result<()> {
     println!("Starting up grid meter server on {socket_addr}");
     let listener = TcpListener::bind(socket_addr).await?;
     let server = Server::new(listener);
-    let new_service = |_socket_addr| Ok(Some(GridMeterService::new(instantaneous_data.clone())));
+    let new_service = |_socket_addr| {
+        Ok(Some(GridMeterService::new(
+            instantaneous_data.clone(),
+            measuring_system,
+            serial_number,
+        )))
+    };
     let on_connected = |stream, socket_addr| async move {
         accept_tcp_connection(stream, socket_addr, new_service)
     };
@@ -170,4 +190,19 @@ pub async fn run_grid_meter_server(
     };
     server.serve(&on_connected, on_process_error).await?;
     Ok(())
+}
+
+#[repr(u16)]
+#[derive(Debug, Clone, Copy)]
+pub enum MeasuringSystem {
+    /// 3P.N
+    Setup3PN = 0,
+    /// 3P.1
+    Setup3P1 = 1,
+    /// 2P
+    Setup2P = 2,
+    /// 1P
+    Setup1P = 3,
+    /// 3P
+    Setup3P = 4,
 }

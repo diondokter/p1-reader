@@ -1,6 +1,12 @@
-use std::{env, net::SocketAddr, time::Duration};
+use std::{
+    env,
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use backoff::backoff::Backoff;
+use grid_meter::InstantaneousData;
 use sqlx::{Pool, Postgres, postgres::PgPool};
 use tokio::time::timeout;
 use tokio_modbus::client::Reader;
@@ -8,6 +14,24 @@ use tokio_modbus::client::Reader;
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
+
+    let grid_meter_data = Arc::new(std::sync::Mutex::new(
+        grid_meter::InstantaneousData::default(),
+    ));
+    let grid_meter_address = env::var("GRID_METER_ADDRESS")?.parse().unwrap();
+    tokio::spawn({
+        let grid_meter_data = grid_meter_data.clone();
+        async move {
+            grid_meter::run_grid_meter_server(
+                grid_meter_address,
+                grid_meter_data,
+                grid_meter::MeasuringSystem::Setup1P,
+                b"BY24600320012\0",
+            )
+            .await
+            .unwrap();
+        }
+    });
 
     println!("Connecting to database");
     let pool = PgPool::connect(&env::var("DATABASE_URL")?).await?;
@@ -28,7 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let connect_time = tokio::time::Instant::now();
 
-        let result = connect_and_run(*addr, &pool).await;
+        let result = connect_and_run(*addr, &pool, &grid_meter_data).await;
         println!("Connection ended with: {}", result.as_ref().unwrap_err());
 
         match result {
@@ -44,7 +68,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-async fn connect_and_run(addr: SocketAddr, pool: &Pool<Postgres>) -> Result<(), Error> {
+async fn connect_and_run(
+    addr: SocketAddr,
+    pool: &Pool<Postgres>,
+    grid_meter_data: &Mutex<InstantaneousData>,
+) -> Result<(), Error> {
     println!("Trying to connect to: {addr}");
     let mut ctx = timeout(
         Duration::from_secs(60),
@@ -92,6 +120,24 @@ async fn connect_and_run(addr: SocketAddr, pool: &Pool<Postgres>) -> Result<(), 
         )
         .execute(pool)
         .await?;
+
+        {
+            let l1_voltage = realtime_data[0x16 - 0x09] as f32 / 10.0;
+            let l1_current = realtime_data[0x17 - 0x09] as f32 / 100.0;
+            let l1_power = realtime_data[0x1A - 0x09] as f32;
+
+            let mut grid_meter_data = grid_meter_data.lock().unwrap();
+            grid_meter_data.v_l1_n = (l1_voltage * 10.0).round() as i32;
+            grid_meter_data.a_l1 = (l1_current * 1000.0).round() as i32;
+            grid_meter_data.w_l1 = (l1_power * 10_000.0).round() as i32;
+            grid_meter_data.w_sum =
+                grid_meter_data.w_l1 + grid_meter_data.w_l2 + grid_meter_data.w_l3;
+
+            grid_meter_data.kwh_plus_l1 = (total_energy * 10.0).round() as i32;
+            grid_meter_data.kwh_plus_total = grid_meter_data.kwh_plus_l1
+                + grid_meter_data.kwh_plus_l2
+                + grid_meter_data.kwh_plus_l3;
+        }
     }
 }
 

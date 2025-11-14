@@ -18,9 +18,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     tokio::spawn({
         let grid_meter_data = grid_meter_data.clone();
         async move {
-            grid_meter::run_grid_meter_server(grid_meter_address, grid_meter_data)
-                .await
-                .unwrap();
+            grid_meter::run_grid_meter_server(
+                grid_meter_address,
+                grid_meter_data,
+                grid_meter::MeasuringSystem::Setup3PN,
+                b"BY24600320011\0",
+            )
+            .await
+            .unwrap();
         }
     });
 
