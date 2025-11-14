@@ -133,7 +133,6 @@ impl tokio_modbus::server::Service for GridMeterService {
                     (0xA100, 1) => Ok(Response::ReadHoldingRegisters(vec![0x0000])), // Front selector status: 0
                     (0x0000, 80) => Ok(Response::ReadHoldingRegisters({
                         let mut data = self.instantaneous_data.lock().unwrap();
-                        data.w_l1 += 10;
                         let data = data.clone();
                         let words = unsafe { transmute::<_, [u16; 80]>(data) };
                         words.to_vec()

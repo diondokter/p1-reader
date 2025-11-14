@@ -38,6 +38,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Running database migrations");
     sqlx::migrate!().run(&pool).await?;
 
+    let last_row = sqlx::query!("SELECT * FROM solar_data_points ORDER BY time DESC LIMIT 1")
+        .fetch_optional(&pool)
+        .await?;
+
+    if let Some(row) = last_row {
+        println!("Starting total energy: {}", row.total_energy);
+
+        {
+            let mut grid_meter_data = grid_meter_data.lock().unwrap();
+            grid_meter_data.kwh_plus_l1 = (row.total_energy * 10.0).round() as i32;
+            grid_meter_data.kwh_plus_total =
+                grid_meter_data.kwh_plus_l1 + grid_meter_data.kwh_plus_l2 + grid_meter_data.kwh_plus_l3;
+        }
+    }
+
     println!("Getting inverter sock addr");
     let addr = &env::var("INVERTER_SOCKADDR")?.parse()?;
     println!("Ready");
@@ -54,6 +69,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let result = connect_and_run(*addr, &pool, &grid_meter_data).await;
         println!("Connection ended with: {}", result.as_ref().unwrap_err());
+
+        {
+            let mut grid_meter_data = grid_meter_data.lock().unwrap();
+            grid_meter_data.v_l1_n = 0;
+            grid_meter_data.a_l1 = 0;
+            grid_meter_data.w_l1 = 0;
+            grid_meter_data.w_sum = grid_meter_data.w_l1 + grid_meter_data.w_l2 + grid_meter_data.w_l3;
+        }
 
         match result {
             e @ Err(Error::Sqlx(_)) => e?,
