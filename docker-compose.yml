@@ -42,6 +42,8 @@ services:
       DATABASE_URL: postgres://postgres:psqlpassword@db/solar-data
       INVERTER_SOCKADDR: "192.168.1.61:502"
       GRID_METER_ADDRESS: 0.0.0.0:8899
+    ports:
+      - '8899:8899'
     volumes:
       - ./solar-reader:/usr/src/myapp
     working_dir: /usr/src/myapp

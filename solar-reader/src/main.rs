@@ -129,7 +129,7 @@ async fn connect_and_run(
             let mut grid_meter_data = grid_meter_data.lock().unwrap();
             grid_meter_data.v_l1_n = (l1_voltage * 10.0).round() as i32;
             grid_meter_data.a_l1 = (l1_current * 1000.0).round() as i32;
-            grid_meter_data.w_l1 = (l1_power * 10_000.0).round() as i32;
+            grid_meter_data.w_l1 = (l1_power * 10.0).round() as i32;
             grid_meter_data.w_sum =
                 grid_meter_data.w_l1 + grid_meter_data.w_l2 + grid_meter_data.w_l3;
 
